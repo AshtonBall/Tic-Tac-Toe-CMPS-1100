@@ -45,6 +45,8 @@ def settings_menu(settings):
             size = input("Enter board size (3-10): ")
             if size.isdigit() and 3 <= int(size) <= 10:
                 settings.size = int(size)
+                if settings.k and settings.k > settings.size:
+                    settings.k = None
                 print("Updated board size.")
 
         elif choice == "2":
@@ -61,6 +63,7 @@ def settings_menu(settings):
         elif choice == "3":
             if settings.player_mode != "single":
                 print("Difficulty disabled in 2-player mode.")
+                input("Press Enter to continue.")
                 continue
 
             print("1: Easy  2: Medium  3: Hard")
@@ -97,10 +100,18 @@ def settings_menu(settings):
             if "4" in choice_modes:
                 settings.modes.append("corners")
 
-            if "2" in choice_modes:
-                k = input("Enter K value: ")
-                if k.isdigit():
-                    settings.k = int(k)
+            if "connectk" in settings.modes:
+                while True:
+                    k = input(f"Enter K value (2-{settings.size}): ").strip()
+                    if k.isdigit():
+                        k_val = int(k)
+                        if 2 <= k_val <= settings.size:
+                            settings.k = k_val
+                            break
+                        else:
+                            print(f"K must be between 2 and {settings.size}!")
+                    else:
+                        print("Please enter a number.")
 
         elif choice == "5":
             return
@@ -170,13 +181,18 @@ class TicTacToe:            # Tic Tac Toe game implemented as a class. The board
     def boardReset(self):
         self.board = [" " for _ in range(self.size * self.size)]        # Wipes the board
 
-    def checkWinner(self, symbol):                                          # Calls the appropriate checkWinner function for the chosen gamemode
-        return (
-            self.checkClassicWinner(symbol)
-            or self.checkConnectKWinner(symbol)
-            or self.checkSquareWinner(symbol)
-            or self.checkCornersWinner(symbol)
-        )
+    def checkWinner(self, symbol):  # Calls the appropriate checkWinner function for the chosen gamemodes; Checks for win condition
+        
+        for mode in self.modes:
+            if mode == "classic" and self.checkClassicWinner(symbol):
+                return True
+            elif mode == "connectk" and self.checkConnectKWinner(symbol):
+                return True
+            elif mode == "square" and self.checkSquareWinner(symbol):
+                return True
+            elif mode == "corners" and self.checkCornersWinner(symbol):
+                return True
+        return False
 
     def checkClassicWinner(self, symbol):          # Checks to boards to see if player or computer has obtained a win condition
         s = self.size
@@ -198,7 +214,7 @@ class TicTacToe:            # Tic Tac Toe game implemented as a class. The board
         return False        # No win condition met
     
     def checkConnectKWinner(self, symbol):      # Connect-K gamemode win condtion
-        if "connectk" not in self.modes:
+        if "connectk" not in self.modes or self.k is None:      # Skips if connect-k mode not in use
             return False
         
         s = self.size       # size of board
@@ -266,33 +282,30 @@ class TicTacToe:            # Tic Tac Toe game implemented as a class. The board
         return [i for i in range(len(self.board)) if self.board[i] == " "]
     
 
-    def computerMove(self):             
-
+    def computerMove(self):
         if self.difficulty == "easy":
             self.AI_easy()
-
         elif self.difficulty == "medium":
             self.AI_medium()
-
         elif self.difficulty == "hard":
             self.AI_hard()
 
 
-    # AI choices
     def AI_easy(self):
+        """Random move"""
         self.board[random.choice(self.validMoves())] = self.computer
 
 
     def AI_medium(self):
-
-        # try win
+        """Win → Block → Random"""
+        # Try to win
         for index in self.validMoves():
             self.board[index] = self.computer
             if self.checkWinner(self.computer):
                 return
             self.board[index] = " "
 
-        # block player
+        # Block player
         for index in self.validMoves():
             self.board[index] = self.player
             if self.checkWinner(self.player):
@@ -300,42 +313,52 @@ class TicTacToe:            # Tic Tac Toe game implemented as a class. The board
                 return
             self.board[index] = " "
 
-        # random
         self.AI_easy()
 
 
     def AI_hard(self):
+        """Unbeatable AI using Minimax"""
+        best_score = -float('inf')
+        best_move = None
 
-        # 1. win
         for index in self.validMoves():
             self.board[index] = self.computer
-            if self.checkWinner(self.computer):
-                return
+            score = self.minimax(False)
             self.board[index] = " "
 
-        # 2. block
-        for index in self.validMoves():
-            self.board[index] = self.player
-            if self.checkWinner(self.player):
+            if score > best_score:
+                best_score = score
+                best_move = index
+
+        if best_move is not None:
+            self.board[best_move] = self.computer
+
+
+    def minimax(self, is_maximizing):
+        """Minimax algorithm"""
+        if self.checkWinner(self.computer):
+            return 10
+        if self.checkWinner(self.player):
+            return -10
+        if self.boardFull():
+            return 0
+
+        if is_maximizing:   # Computer's turn
+            best_score = -float('inf')
+            for index in self.validMoves():
                 self.board[index] = self.computer
-                return
-            self.board[index] = " "
-
-        # 3. center
-        center = (self.size * self.size) // 2
-        if self.board[center] == " ":
-            self.board[center] = self.computer
-            return
-        
-         # 4. take first available corner (NEW IMPROVEMENT)
-        corners = [0, self.size - 1, self.size * (self.size-1), self.size * self.size - 1]
-        for c in corners:
-            if self.board[c] == " ":
-                self.board[c] = self.computer
-                return
-
-        # 5. random
-        self.AI_easy()
+                score = self.minimax(False)
+                self.board[index] = " "
+                best_score = max(score, best_score)
+            return best_score
+        else:               # Player's turn
+            best_score = float('inf')
+            for index in self.validMoves():
+                self.board[index] = self.player
+                score = self.minimax(True)
+                self.board[index] = " "
+                best_score = min(score, best_score)
+            return best_score
 
 
     def playerMove(self):                   # Used to allow the player to choose a move
@@ -375,6 +398,8 @@ class TicTacToe:            # Tic Tac Toe game implemented as a class. The board
 
             if self.player_mode == "two_player":
 
+
+                # Two Player mode
                 move = input(f"Player {self.turn}, choose a position (or 'forfeit'): ").lower()
 
                 if move == "forfeit":
@@ -385,26 +410,26 @@ class TicTacToe:            # Tic Tac Toe game implemented as a class. The board
                     i = int(move) - 1
                     if 0 <= i < len(self.board) and self.board[i] == " ":
                         self.board[i] = self.turn
+
+                        if self.checkWinner(self.turn):
+                            self.printBoard()
+                            print(f"Player {self.turn} Wins!")
+                            return
+
+                        if self.boardFull():
+                            self.printBoard()
+                            print("Tie!")
+                            return
+
+                        self.turn = "O" if self.turn == "X" else "X"
                     else:
-                        print("Invalid move.")
-                        continue
+                        print("Invalid move!")
                 else:
-                    print("Invalid move.")
-                    continue
+                    print("Please enter a number.")
 
-                if self.checkWinner(self.turn):
-                    self.printBoard()
-                    print(f"Player {self.turn} wins!")
-                    return
-
-                if self.boardFull():
-                    self.printBoard()
-                    print("Tie!")
-                    return
-
-                self.turn = "O" if self.turn == "X" else "X"
             
             else:
+                # Single Player mode
                 result = self.playerMove()
                 if result == "forfeit":
                     print("You forfeited!")
