@@ -3,6 +3,7 @@ import random               # implemented for when computer decoides to randomly
 RED = "\033[91m"
 BLUE = "\033[94m"           # Coloring for the symbols
 RESET = "\033[0m"
+HIGHLIGHT = "\033[103m"
 
 class GameSettings:
     def __init__(self):                 # Default game settings
@@ -11,6 +12,7 @@ class GameSettings:
         self.k = None
         self.difficulty = "medium"
         self.player_mode = "single"
+        self.custom_wins = []
 
 
 def Rulebook():                                         # Displays the game rules for new players
@@ -19,6 +21,7 @@ def Rulebook():                                         # Displays the game rule
     print("Connect-K: get K in a row in any direction")
     print("Square: make a 2x2 block")
     print("4 Corners: occupy all four corners")
+    print("Custom: Define your own win pattern by entering cell numbers")
 
     print("\nPlayer Modes:")                # Explains the different player modes
     print("- Single Player vs. Computer")
@@ -29,7 +32,35 @@ def Rulebook():                                         # Displays the game rule
     print("- Type 'forfeit' to quit a game")
     print("\n")
     input("Press Enter to return to menu...")       # Returns to main manu after thew rules screen
+
+
+def show_pattern_board(size, current_pattern):        # Helper function to show the cell numbers for custom pattern creation    
+    print(f"\n----- Current Pattern Visual (Board {size}x{size}) -----")  
+    board = [" "] * (size * size)
+
+    # Mark current pattern positions 
+    for i in current_pattern:
+        board[i] = "*"      # Displays the  highlight symbol
+
+    cell_width = len(str(size * size))
+
+    # Display the board
+    for row in range(size):
+        for col in range(size):
+            index = row * size + col
+            if board[index] == "*":
+                value = HIGHLIGHT + "*" + RESET
+            else:
+                value = str(index + 1).rjust(cell_width)
+            print(value, end="")
+            if col < size - 1:
+                print(" | ", end="")
+        print()
+        if row < size - 1:
+            print("-" * ((cell_width + 3) * size - 3))
+    print()
         
+
 def settings_menu(settings):
     while True:                                         # Menu to alter game settings before starting a game
         print("\n----- SETTINGS -----")
@@ -37,9 +68,10 @@ def settings_menu(settings):
         print(f"2. Player Mode (current: {settings.player_mode})")
         print(f"3. Difficulty (current: {settings.difficulty})")
         print(f"4. Game Modes (current: {settings.modes})")
-        print("5. Back")        # Goes back to main menu
+        print(f"5. Set Custom Win Patterns (current: {len(settings.custom_wins)} patterns)")
+        print("6. Back")        # Goes back to main menu
 
-        choice = input("Select: ").strip()      # Takes input to determine next action
+        choice = input("Select to Modify: ").strip()      # Takes input to determine next action
 
         if choice == "1":                               # Pressing 1 opens the board size options
             size = input("Enter board size (3-10): ")
@@ -53,7 +85,7 @@ def settings_menu(settings):
             print("1: Single Player (vs Computer)")
             print("2: 2 Player Local")
 
-            mode = input("Select: ")        # Selection for player mode 
+            mode = input("Select to Modify: ")        # Selection for player mode 
 
             if mode == "1":
                 settings.player_mode = "single"
@@ -113,7 +145,60 @@ def settings_menu(settings):
                     else:
                         print("Please enter a number.")
 
-        elif choice == "5":     # Back to main menu
+        elif choice == "5":         # Set a custom winning pattern
+            print("\n----- Custom Win Patterns -----")                                      # Header for custom win pattern setting
+            print("Enter winning combinations using cell numbers (Example: '1 2 3 4')")
+            print("Type 'done' when finished and 'clear' to reset all patterns.")
+            print("Type 'save' to save the current pattern")
+
+            settings.custom_wins = []       # List of custom win patterns (lists for cell indexes)
+            current_pattern = []
+
+            while True:
+                show_pattern_board(settings.size, current_pattern)        # Shows the current pattern visually on the board 
+                print("Type 'save' to save pattern, 'clear' to clear all patterns, and 'done' when finished")
+                line = input("Enter a pattern: ").strip().lower()       # User enters cell numbers to define a pattern
+
+                if line == "done":
+                    if current_pattern:        # If done is entered, the current pattern is added to the custom patterns list
+                        settings.custom_wins.append(current_pattern[:])
+                        print(f"Added pattern: {[x+1 for x in current_pattern]}")
+                    break
+
+                if line == "clear":
+                    settings.custom_wins = []           # Clears custom patterns
+                    current_pattern = []
+                    print("All custom patterns have been cleared")
+                    continue
+
+                if line == "save":      # Saves tge current pattern to custom patterns list
+                    if current_pattern:
+                        settings.custom_wins.append(current_pattern[:])
+                        print(f"Pattern saved ({len(settings.custom_wins)} total)")
+                        current_pattern = []
+                    else:
+                        print("No pattern to add")
+                    continue
+
+                try:                                                            # Converts input to cell indexes and adds it as a custom index
+                    pattern = [int(x) - 1 for x in line.split() if x.isdigit()]
+                    if pattern and all(0 <= p < settings.size**2 for p in pattern):
+                        current_pattern = pattern
+                        print(f"Current pattern updated: {[x+1 for x in pattern]}")
+                    else:
+                        print("Invalid positions")
+                except:                                                 # Error messages
+                    print("Invalid input; example: 1 2 3 4")
+
+            # Add "custom" to modes if patterns exist   
+
+            if settings.custom_wins and "custom" not in settings.modes:
+                settings.modes.append("custom")
+            elif not settings.custom_wins and "custom" in settings.modes:
+                settings.modes.remove("custom")
+                print("Custom mode removed from game modes since no patterns exist.")
+           
+        elif choice == "6":     # Back to main menu
             return
 
 
@@ -129,6 +214,7 @@ class TicTacToe:            # Tic Tac Toe game implemented as a class. The board
         self.k = settings.k
         self.difficulty = settings.difficulty
         self.player_mode = settings.player_mode
+        self.custom_wins = settings.custom_wins[:]
 
         self.turn = "X"     # used in two palyer mode
 
@@ -145,6 +231,8 @@ class TicTacToe:            # Tic Tac Toe game implemented as a class. The board
                 names.append("Square")
             elif mode == "corners":
                 names.append("4 Corners")
+            elif mode == "custom":
+                names.append(f"Custom ({len(self.custom_wins)})")
 
         return ", ".join(names)     # joins them using commas
 
@@ -191,6 +279,14 @@ class TicTacToe:            # Tic Tac Toe game implemented as a class. The board
             elif mode == "square" and self.checkSquareWinner(symbol):
                 return True
             elif mode == "corners" and self.checkCornersWinner(symbol):
+                return True
+            elif mode == "custom" and self.checkCustomWinner(symbol):
+                return True
+        return False
+
+    def checkCustomWinner(self, symbol):            # Checks if any custom win pattern conditions are met
+        for pattern in self.custom_wins:
+            if all(self.board[i] == symbol for i in pattern):
                 return True
         return False
 
@@ -288,11 +384,12 @@ class TicTacToe:            # Tic Tac Toe game implemented as a class. The board
         elif self.difficulty == "medium":
             self.AI_medium()
         elif self.difficulty == "hard":
+            print("Computer is thinking...")
             self.AI_hard()
 
 
     def AI_easy(self):      # Easy AI just mades random moves without strategy
-        """Random move"""   
+  
         self.board[random.choice(self.validMoves())] = self.computer
 
 
@@ -315,47 +412,58 @@ class TicTacToe:            # Tic Tac Toe game implemented as a class. The board
         self.AI_easy()      # Implements random move if no other good option is found
 
 
-    def AI_hard(self):         # algorithm that chooses the best move by looking at future possible moves   
-        best_score = -float('inf')  
+    def AI_hard(self):      # Hard Ai with minimax algorithm
+        
+        if self.size > 4:                    # Safety for very big boards
+            print("Hard mode is very slow on large boards. Using Medium instead.")
+            self.AI_medium()
+            return
+
+        best_score = -float('inf')
         best_move = None
 
-        for index in self.validMoves():
+        for index in self.validMoves():         # Simulates possible moves and evaluates score to choose best move
             self.board[index] = self.computer
-            score = self.minimax(False)     # alrogrithm evauluates the move by looking at future moves and assigns a score to the move
+            score = self.minimax(alpha=-float('inf'), beta=float('inf'), is_maximizing=False)
             self.board[index] = " "
 
-            if score > best_score:      # chooses the move with the best score
+            if score > best_score:      # Chooses highest score
                 best_score = score
                 best_move = index
 
-        if best_move is not None:               # If there is a valid move, the computer takes it
+        if best_move is not None:                   # If best move found, it is made; otherwise randome move
             self.board[best_move] = self.computer
 
 
-    def minimax(self, is_maximizing):       # alrgorithm for looking at future moves and assigning scores to them
-        """Minimax algorithm"""
-        if self.checkWinner(self.computer):     # Positive score for computer win
+    def minimax(self, alpha, beta, is_maximizing):      # Minimax algorithm with alpha-beta pruning
+        if self.checkWinner(self.computer):
             return 10
-        if self.checkWinner(self.player):       # Negative score for player win
+        if self.checkWinner(self.player):
             return -10
-        if self.boardFull():                    # Neutral score for tie or no win condition
+        if self.boardFull():
             return 0
 
-        if is_maximizing:   # Computer's turn
-            best_score = -float('inf')          
-            for index in self.validMoves():         # Loops through valid moves and recursively calls minimax to choose move with highest score
-                self.board[index] = self.computer   
-                score = self.minimax(False)
+        if is_maximizing:  # Computer's turn (maximizer)            # Computer wants to amximine score and player wants to minimize it
+            best_score = -float('inf')
+            for index in self.validMoves():     # Simulates possible moves and recursively evaluates score
+                self.board[index] = self.computer
+                score = self.minimax(alpha, beta, False)
                 self.board[index] = " "
                 best_score = max(score, best_score)
+                alpha = max(alpha, best_score)
+                if beta <= alpha:
+                    break  # Beta cutoff
             return best_score
-        else:               # Player's turn
+        else:              # Player's turn (minimizer)
             best_score = float('inf')
-            for index in self.validMoves():         # Loops through valid moves and recursively calls minimax to choose move with lowest score for the player
+            for index in self.validMoves():         # Simulates possible moves and recursively evaluates score
                 self.board[index] = self.player
-                score = self.minimax(True)
+                score = self.minimax(alpha, beta, True)
                 self.board[index] = " "
                 best_score = min(score, best_score)
+                beta = min(beta, best_score)
+                if beta <= alpha:
+                    break  # Alpha cutoff
             return best_score
 
 
@@ -372,7 +480,7 @@ class TicTacToe:            # Tic Tac Toe game implemented as a class. The board
                     self.board[i] = self.player     # If valid, the move is complete
                     return None
 
-            print("Invalid move.")      # If invalid, an error message is dsiplayed
+            print("Invalid move.")      # If invalid, an error message is displayed
 
 
     def play(self):                 # Starts the game
@@ -478,7 +586,7 @@ def mainMenu():                 # Main menu loop that allows player to change ga
         print("3. Rules")
         print("4. Quit")
 
-        choice = input("> ")            # Inpput for main menu selection
+        choice = input("Select option: ")            # Input for main menu selection
 
         if choice == "1":           # Starts game with applied settings
             start_game(settings)
